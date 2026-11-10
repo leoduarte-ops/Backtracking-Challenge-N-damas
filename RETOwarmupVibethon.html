@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N Damas - Reto Lógico</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --text-color: #2d3748;
+            --primary: #4299e1;
+            --primary-hover: #3182ce;
+            --danger: #e53e3e;
+            --success: #48bb78;
+            --board-light: #ebedf0;
+            --board-dark: #a0aec0;
+            --cell-size: clamp(40px, 10vw, 80px);
+            --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Pantallas */
+        .screen { display: none; width: 100%; flex-direction: column; align-items: center; }
+        .screen.active { display: flex; }
+
+        /* Estilos Pantalla Inicio y Fin */
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 20px;
+        }
+
+        h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--primary); }
+        h2 { font-size: 1.5rem; margin-bottom: 20px; }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            border: 2px solid #cbd5e0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus { border-color: var(--primary); }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s, transform 0.1s;
+        }
+        button:hover { background-color: var(--primary-hover); }
+        button:active { transform: scale(0.98); }
+        
+        .error-msg { color: var(--danger); font-size: 0.9rem; margin-bottom: 15px; min-height: 1.2rem; }
+
+        /* Clasificación */
+        .ranking-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 600px;
+            overflow-x: auto;
+        }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #f7fafc; font-weight: 600; }
+        .current-player { background-color: #ebf8ff; font-weight: bold; }
+
+        /* Pantalla Juego */
+        .game-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stat-box { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 80px; }
+        .stat-label { font-size: 0.8rem; text-transform: uppercase; color: #718096; font-weight: bold; }
+        .stat-value { font-size: 1.2rem; font-weight: bold; }
+        
+        .hearts { color: var(--danger); font-size: 1.5rem; letter-spacing: 2px; }
+
+        .board-container {
+            margin-top: 10px;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+
+        .board {
+            display: grid;
+            border: 4px solid #4a5568;
+            border-radius: 4px;
+            background-color: var(--board-dark);
+            gap: 0;
+            overflow: hidden;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: calc(var(--cell-size) * 0.6);
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s;
+        }
+        
+        .cell.light { background-color: var(--board-light); }
+        .cell.dark { background-color: var(--board-dark); }
+        .cell:hover { opacity: 0.8; }
+        .cell:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; z-index: 10; }
+
+        .queen { cursor: pointer; text-shadow: 0 2px 4px rgba(0,0,0,0.3); animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        /* Estados de error visual */
+        .conflict-queen { animation: pulseWarning 1s infinite alternate; color: var(--danger); }
+        .error-cell { position: relative; background-color: #fed7d7 !important; animation: shake 0.4s; }
+        .error-cell::after {
+            content: "X";
+            position: absolute;
+            color: var(--danger);
+            font-size: calc(var(--cell-size) * 0.8);
+            font-weight: bold;
+            opacity: 0.7;
+        }
+
+        .status-message {
+            margin-top: 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            min-height: 1.5rem;
+            text-align: center;
+            transition: color 0.3s;
+        }
+
+        .msg-error { color: var(--danger); }
+        .msg-success { color: var(--success); }
+        
+        .queens-counter {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #4a5568;
+        }
+
+        /* Banner nivel superado */
+        .level-banner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.5);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+        }
+        .level-banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .level-banner h3 { color: var(--success); font-size: 2rem; margin-bottom: 5px; }
+
+        /* Confeti */
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            z-index: 999;
+            pointer-events: none;
+            animation: fall linear forwards;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); }
+            100% { transform: scale(1); }
+        }
+        @keyframes pulseWarning {
+            0% { transform: scale(1); filter: hue-rotate(0deg); }
+            100% { transform: scale(1.2); filter: hue-rotate(-50deg); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+        }
+        @keyframes fall {
+            to { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+
+        @media (max-width: 600px) {
+            .game-header { flex-direction: column; gap: 10px; align-items: center; }
+            .stat-box { flex-direction: row; gap: 10px; width: 100%; justify-content: space-between; border-bottom: 1px solid #edf2f7; padding-bottom: 5px; }
+            .stat-box:last-child { border-bottom: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- PANTALLA DE INICIO -->
+    <div id="screen-start" class="screen active">
+        <div class="card">
+            <h1>♛ N Damas</h1>
+            <p style="margin-bottom: 20px; color: #4a5568;">Coloca N damas sin que se ataquen. Un error te cuesta una vida.</p>
+            <input type="text" id="player-name" placeholder="Tu nombre o alias" maxlength="20" aria-label="Nombre del jugador">
+            <div id="start-error" class="error-msg"></div>
+            <button id="btn-start">Comenzar partida</button>
+        </div>
+        <div class="ranking-container">
+            <h2>Clasificación Global</h2>
+            <table id="start-ranking-table">
+                <thead><tr><th>Pos</th><th>Nombre</th><th>Puntos</th><th>Logro</th></tr></thead>
+                <tbody><!-- Llenado por JS --></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PANTALLA DE JUEGO -->
+    <div id="screen-game" class="screen">
+        <div class="game-header">
+            <div class="stat-box"><span class="stat-label">Jugador</span><span class="stat-value" id="ui-name"></span></div>
+            <div class="stat-box"><span class="stat-label">Nivel</span><span class="stat-value" id="ui-level"></span></div>
+            <div class="stat-box"><span class="stat-label">Puntos</span><span class="stat-value" id="ui-score">0</span></div>
+            <div class="stat-box"><span class="stat-label">Tiempo</span><span class="stat-value" id="ui-time">00:00</span></div>
+            <div class="stat-box"><span class="stat-label">Vidas</span><span class="stat-value hearts" id="ui-lives">❤️❤️❤️</span></div>
+        </div>
+        
+        <div class="queens-counter" id="ui-counter">0 de 4 damas colocadas</div>
+
+        <div class="board-container">
+            <div id="board" class="board"></div>
+            <div id="level-banner" class="level-banner">
+                <h3>¡Nivel superado!</h3>
+                <p>+100 puntos</p>
+            </div>
+        </div>
+
+        <div id="status-msg" class="status-message"></div>
+    </div>
+
+    <!-- PANTALLA DE FIN -->
+    <div id="screen-end" class="screen">
+        <div class="card">
+            <h1>Fin de la partida</h1>
+            <p id="end-stats" style="margin-bottom: 20px; font-size: 1.1rem; color: #4a5568;"></p>
+            <button id="btn-restart">Jugar de nuevo</button>
+        </div>
+        <div class="ranking-container">
+            <h2>Clasificación Global</h2>
+            <table id="end-ranking-table">
+                <thead><tr><th>Pos</th><th>Nombre</th><th>Puntos</th><th>Logro</th></tr></thead>
+                <tbody><!-- Llenado por JS --></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* =========================================================================
+       ESTADO DEL JUEGO Y MEMORIA
+       ========================================================================= */
+    const state = {
+        playerName: "",
+        level: 1,
+        N: 4,
+        queens: [], // arreglo de {r, c}
+        lives: 3,
+        score: 0,
+        timeAccumulated: 0,
+        timeLastLevel: 0,
+        levelsCompleted: 0,
+        isPaused: false,
+        isGameOver: false,
+        intervalId: null
+    };
+
+    let inMemoryRanking = []; // Respaldo si falla localStorage
+
+    /* =========================================================================
+       REFERENCIAS AL DOM
+       ========================================================================= */
+    const screens = {
+        start: document.getElementById('screen-start'),
+        game: document.getElementById('screen-game'),
+        end: document.getElementById('screen-end')
+    };
+    const ui = {
+        nameInput: document.getElementById('player-name'),
+        startError: document.getElementById('start-error'),
+        btnStart: document.getElementById('btn-start'),
+        btnRestart: document.getElementById('btn-restart'),
+        
+        name: document.getElementById('ui-name'),
+        level: document.getElementById('ui-level'),
+        score: document.getElementById('ui-score'),
+        time: document.getElementById('ui-time'),
+        lives: document.getElementById('ui-lives'),
+        counter: document.getElementById('ui-counter'),
+        
+        board: document.getElementById('board'),
+        statusMsg: document.getElementById('status-msg'),
+        levelBanner: document.getElementById('level-banner'),
+        endStats: document.getElementById('end-stats'),
+        
+        startRankingTable: document.querySelector('#start-ranking-table tbody'),
+        endRankingTable: document.querySelector('#end-ranking-table tbody')
+    };
+
+    /* =========================================================================
+       LÓGICA DE CLASIFICACIÓN (LocalStorage)
+       ========================================================================= */
+    function getRanking() {
+        try {
+            const data = localStorage.getItem('nQueensRanking');
+            return data ? JSON.parse(data) : [];
+        } catch (e) {
+            return inMemoryRanking;
+        }
+    }
+
+    function saveRanking(entry) {
+        let ranking = getRanking();
+        ranking.push(entry);
+        
+        // Ordenar: Mayor punto, luego menor tiempo de logro
+        ranking.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return a.timeLastLevel - b.timeLastLevel;
+        });
+
+        try {
+            localStorage.setItem('nQueensRanking', JSON.stringify(ranking));
+        } catch (e) {
+            inMemoryRanking = ranking;
+        }
+    }
+
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function renderRankingTables(currentPlayerEntry = null) {
+        const ranking = getRanking();
+        let html = '';
+        let currentPos = 1;
+
+        for (let i = 0; i < ranking.length; i++) {
+            // Manejo de empates en posición
+            if (i > 0) {
+                const prev = ranking[i-1];
+                const curr = ranking[i];
+                if (prev.score !== curr.score || prev.timeLastLevel !== curr.timeLastLevel) {
+                    currentPos = i + 1;
+                }
+            }
+            
+            const r = ranking[i];
+            const isCurrent = currentPlayerEntry && 
+                              r.name === currentPlayerEntry.name && 
+                              r.score === currentPlayerEntry.score && 
+                              r.timeLastLevel === currentPlayerEntry.timeLastLevel;
+                              
+            const logroText = r.levelsCompleted > 0 ? formatTime(r.timeLastLevel) : "Sin logro";
+            const rowClass = isCurrent ? 'class="current-player"' : '';
+
+            html += `<tr ${rowClass}>
+                        <td>${currentPos}</td>
+                        <td>${r.name}</td>
+                        <td>${r.score}</td>
+                        <td>${logroText}</td>
+                     </tr>`;
+        }
+        
+        if (ranking.length === 0) {
+            html = `<tr><td colspan="4" style="text-align:center;">Aún no hay partidas registradas.</td></tr>`;
+        }
+
+        ui.startRankingTable.innerHTML = html;
+        ui.endRankingTable.innerHTML = html;
+    }
+
+    /* =========================================================================
+       NÚCLEO DEL JUEGO Y REGLAS
+       ========================================================================= */
+    function initGame(name) {
+        state.playerName = name;
+        state.level = 1;
+        state.N = 4;
+        state.queens = [];
+        state.lives = 3;
+        state.score = 0;
+        state.timeAccumulated = 0;
+        state.timeLastLevel = 0;
+        state.levelsCompleted = 0;
+        state.isPaused = false;
+        state.isGameOver = false;
+
+        ui.name.textContent = state.playerName;
+        ui.statusMsg.textContent = "";
+        
+        if (state.intervalId) clearInterval(state.intervalId);
+        state.intervalId = setInterval(tickTimer, 1000);
+
+        switchScreen('game');
+        updateUI();
+        buildBoard();
+    }
+
+    function tickTimer() {
+        if (!state.isPaused && !state.isGameOver) {
+            state.timeAccumulated++;
+            ui.time.textContent = formatTime(state.timeAccumulated);
+        }
+    }
+
+    function updateUI() {
+        ui.level.textContent = `${state.level} · ${state.N}×${state.N}`;
+        ui.score.textContent = state.score;
+        ui.time.textContent = formatTime(state.timeAccumulated);
+        
+        let hearts = '';
+        for(let i=0; i<3; i++) hearts += i < state.lives ? '❤️' : '🤍';
+        ui.lives.textContent = hearts;
+
+        ui.counter.textContent = `${state.queens.length} de ${state.N} damas colocadas`;
+    }
+
+    function buildBoard() {
+        ui.board.innerHTML = '';
+        ui.board.style.gridTemplateColumns = `repeat(${state.N}, 1fr)`;
+        
+        // Ajuste dinámico de tamaño para tableros grandes
+        const baseSize = window.innerWidth < 600 ? 80 : 60;
+        const cellSize = Math.min(baseSize, 300 / state.N); 
+        document.documentElement.style.setProperty('--cell-size', `${cellSize}px`);
+
+        for (let r = 0; r < state.N; r++) {
+            for (let c = 0; c < state.N; c++) {
+                const cell = document.createElement('div');
+                cell.className = `cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+                cell.dataset.r = r;
+                cell.dataset.c = c;
+                cell.setAttribute('role', 'button');
+                cell.setAttribute('tabindex', '0');
+                cell.setAttribute('aria-label', `Casilla fila ${r+1}, columna ${c+1}`);
+                
+                cell.addEventListener('click', () => handleCellClick(r, c));
+                cell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') handleCellClick(r, c);
+                });
+                
+                ui.board.appendChild(cell);
+            }
+        }
+        renderQueens();
+    }
+
+    function renderQueens() {
+        // Limpiar damas existentes
+        document.querySelectorAll('.queen').forEach(el => el.remove());
+        
+        state.queens.forEach(q => {
+            const cell = document.querySelector(`.cell[data-r="${q.r}"][data-c="${q.c}"]`);
+            if (cell) {
+                const queen = document.createElement('span');
+                queen.className = 'queen';
+                queen.textContent = '♛';
+                cell.appendChild(queen);
+            }
+        });
+        updateUI();
+    }
+
+    function getConflicts(r, c) {
+        return state.queens.filter(q => 
+            q.r === r || 
+            q.c === c || 
+            Math.abs(q.r - r) === Math.abs(q.c - c)
+        );
+    }
+
+    function handleCellClick(r, c) {
+        if (state.isPaused || state.isGameOver) return;
+
+        // Comprobar si ya hay dama
+        const existingIndex = state.queens.findIndex(q => q.r === r && q.c === c);
+        if (existingIndex > -1) {
+            // Retirar dama
+            state.queens.splice(existingIndex, 1);
+            showMessage("Dama retirada.", "");
+            renderQueens();
+            return;
+        }
+
+        // Validar colocación
+        const conflicts = getConflicts(r, c);
+        
+        if (conflicts.length > 0) {
+            handleError(r, c, conflicts);
+        } else {
+            // Colocación válida
+            state.queens.push({r, c});
+            renderQueens();
+            ui.statusMsg.textContent = "";
+            checkLevelComplete();
+        }
+    }
+
+    function handleError(r, c, conflicts) {
+        state.lives--;
+        updateUI();
+        
+        showMessage("Movimiento inválido: esa posición está amenazada. Pierdes 1 vida.", "msg-error");
+        
+        // Resaltar casilla clickeada
+        const targetCell = document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+        if(targetCell) targetCell.classList.add('error-cell');
+        
+        // Resaltar damas conflictivas
+        conflicts.forEach(q => {
+            const qCell = document.querySelector(`.cell[data-r="${q.r}"][data-c="${q.c}"] .queen`);
+            if(qCell) qCell.classList.add('conflict-queen');
+        });
+
+        // Limpiar animaciones luego de 1s
+        setTimeout(() => {
+            if(targetCell) targetCell.classList.remove('error-cell');
+            conflicts.forEach(q => {
+                const qCell = document.querySelector(`.cell[data-r="${q.r}"][data-c="${q.c}"] .queen`);
+                if(qCell) qCell.classList.remove('conflict-queen');
+            });
+        }, 1000);
+
+        if (state.lives <= 0) {
+            setTimeout(endGame, 500); // Pequeña pausa antes de terminar
+        }
+    }
+
+    function checkLevelComplete() {
+        if (state.queens.length === state.N) {
+            // Nivel completado
+            state.isPaused = true;
+            state.score += 100;
+            state.levelsCompleted++;
+            state.timeLastLevel = state.timeAccumulated;
+            
+            updateUI();
+            showMessage("¡Perfecto! Analizando...", "msg-success");
+            
+            // Efectos de celebración
+            ui.levelBanner.classList.add('show');
+            createConfetti();
+
+            // Transición a siguiente nivel
+            setTimeout(() => {
+                ui.levelBanner.classList.remove('show');
+                state.N++;
+                state.level++;
+                state.queens = [];
+                state.isPaused = false;
+                buildBoard();
+                showMessage(`Nivel ${state.level}: Coloca ${state.N} damas.`, "");
+            }, 3000);
+        }
+    }
+
+    function endGame() {
+        state.isGameOver = true;
+        clearInterval(state.intervalId);
+        
+        const entry = {
+            name: state.playerName,
+            score: state.score,
+            levelsCompleted: state.levelsCompleted,
+            timeLastLevel: state.timeLastLevel
+        };
+        
+        saveRanking(entry);
+        
+        ui.endStats.innerHTML = `Llegaste al <strong>Nivel ${state.level}</strong><br>Puntos totales: <strong>${state.score}</strong>`;
+        renderRankingTables(entry);
+        
+        switchScreen('end');
+    }
+
+    /* =========================================================================
+       UTILIDADES E INTERFAZ
+       ========================================================================= */
+    function switchScreen(screenName) {
+        Object.values(screens).forEach(s => s.classList.remove('active'));
+        screens[screenName].classList.add('active');
+    }
+
+    function showMessage(text, cssClass) {
+        ui.statusMsg.textContent = text;
+        ui.statusMsg.className = `status-message ${cssClass}`;
+    }
+
+    function createConfetti() {
+        const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#4299e1', '#9f7aea'];
+        for (let i = 0; i < 60; i++) {
+            const conf = document.createElement('div');
+            conf.className = 'confetti';
+            conf.style.left = Math.random() * 100 + 'vw';
+            conf.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            conf.style.animationDuration = (Math.random() * 2 + 1) + 's';
+            conf.style.opacity = Math.random() + 0.5;
+            document.body.appendChild(conf);
+            
+            // Eliminar elemento tras animación
+            setTimeout(() => conf.remove(), 3000);
+        }
+    }
+
+    /* =========================================================================
+       EVENT LISTENER PRINCIPALES
+       ========================================================================= */
+    ui.btnStart.addEventListener('click', () => {
+        const name = ui.nameInput.value.trim();
+        if (name.length === 0) {
+            ui.startError.textContent = "El nombre no puede estar vacío.";
+            return;
+        }
+        ui.startError.textContent = "";
+        initGame(name);
+    });
+
+    ui.nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') ui.btnStart.click();
+    });
+
+    ui.btnRestart.addEventListener('click', () => {
+        ui.nameInput.value = state.playerName; // Mantener nombre en el input
+        switchScreen('start');
+        renderRankingTables();
+    });
+
+    // Iniciar renderizando la tabla
+    renderRankingTables();
+
+</script>
+</body>
+</html>
